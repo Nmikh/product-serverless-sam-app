@@ -1,0 +1,18 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      java: openjdk11
+  build:
+    commands:
+      - echo Build started on `date`
+      - mvn test
+      - echo Build completed on `date`
+      - mvn package
+  post_build:
+    commands:
+      - aws cloudformation package --template-file template.yml --s3-bucket $S3_BUCKET --output-template-file output-template-file.yml
+artifacts:
+  files:
+    - output-template-file.yml

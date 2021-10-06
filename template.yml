@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: products lambda
+
+Resources:
+  createProduct:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: create-products-lambda
+      Runtime: java11
+      CodeUri: ./
+      Timeout: 30
+      MemorySize: 128
+      Handler: com.products.lambda.handler.CreateProductHandler
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /product
+            Method: POST
+      Environment:
+        Variables:
+          PRODUCTS_TABLE_NAME: !Ref ProductsDynamoTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsDynamoTable
+
+  listProducts:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: list-products-lambda
+      Runtime: java11
+      CodeUri: ./
+      Timeout: 30
+      MemorySize: 128
+      Handler: com.products.lambda.handler.ListProductsHandler
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /product
+            Method: GET
+      Environment:
+        Variables:
+          PRODUCTS_TABLE_NAME: !Ref ProductsDynamoTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsDynamoTable
+
+  getProduct:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: get-product-lambda
+      Runtime: java11
+      CodeUri: ./
+      Timeout: 30
+      MemorySize: 128
+      Handler: com.products.lambda.handler.GetProductHandler
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /product/{id}
+            Method: GET
+      Environment:
+        Variables:
+          PRODUCTS_TABLE_NAME: !Ref ProductsDynamoTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsDynamoTable
+
+  deleteProduct:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: delete-product-lambda
+      Runtime: java11
+      CodeUri: ./
+      Timeout: 30
+      MemorySize: 128
+      Handler: com.products.lambda.handler.DeleteProductHandler
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /product/{id}
+            Method: DELETE
+      Environment:
+        Variables:
+          PRODUCTS_TABLE_NAME: !Ref ProductsDynamoTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsDynamoTable
+
+  productS3ToSqs:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: product-s3-to-sqs-lambda
+      Runtime: java11
+      CodeUri: ./
+      Timeout: 30
+      MemorySize: 128
+      Handler: com.products.lambda.handler.ProductsS3Handler
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref ProductsBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: ".json"
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref ProductsSQS
+      Policies:
+        - S3ReadPolicy:
+            BucketName: product-bucket-logica
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ProductsSQS.QueueName
+
+  productSqsToDynamodb:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: product-sqs-to-dynamodb-lambda
+      Runtime: java11
+      CodeUri: ./
+      Timeout: 30
+      MemorySize: 128
+      Handler: com.products.lambda.handler.ProductsSQSHandler
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ProductsSQS.Arn
+      Environment:
+        Variables:
+          PRODUCTS_TABLE_NAME: !Ref ProductsDynamoTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsDynamoTable
+
+  ProductsDynamoTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+  ProductsSQS:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: products-queue
+  ProductsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: product-bucket-logica
